@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AIR PLAYER MUSIC</title>
+<style>
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #121212;
+    color: #eee;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+  }
+  h1 {
+    margin-bottom: 10px;
+  }
+  #player {
+    background: #222;
+    border-radius: 10px;
+    padding: 20px;
+    width: 320px;
+    box-shadow: 0 0 15px #0f0;
+  }
+  #info {
+    margin-bottom: 15px;
+    text-align: center;
+  }
+  #info h2 {
+    margin: 5px 0;
+    font-size: 1.2em;
+  }
+  #info p {
+    margin: 2px 0;
+    font-size: 0.9em;
+    color: #aaa;
+  }
+  #progress-container {
+    background: #333;
+    height: 8px;
+    border-radius: 5px;
+    cursor: pointer;
+    margin-bottom: 15px;
+    position: relative;
+  }
+  #progress {
+    background: #0f0;
+    height: 100%;
+    width: 0%;
+    border-radius: 5px;
+  }
+  #controls {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    margin-bottom: 15px;
+  }
+  button {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: #0f0;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.3s ease;
+  }
+  button:hover {
+    color: #6f6;
+  }
+  #playlist {
+    max-height: 150px;
+    overflow-y: auto;
+    background: #1a1a1a;
+    border-radius: 5px;
+    padding: 10px;
+  }
+  #playlist div {
+    padding: 5px;
+    cursor: pointer;
+    border-radius: 4px;
+  }
+  #playlist div.active {
+    background: #0f0;
+    color: #121212;
+  }
+  #playlist div:hover {
+    background: #333;
+  }
+  #add-songs-label {
+    display: inline-block;
+    margin-bottom: 15px;
+    cursor: pointer;
+    color: #0f0;
+    border: 1px solid #0f0;
+    padding: 6px 12px;
+    border-radius: 5px;
+    transition: background 0.3s ease;
+  }
+  #add-songs-label:hover {
+    background: #0f0;
+    color: #121212;
+  }
+  input[type="file"] {
+    display: none;
+  }
+  #shuffle-btn.active {
+    color: #ff0;
+  }
+</style>
+</head>
+<body>
+
+<h1>AIR PLAYER MUSIC</h1>
+
+<label id="add-songs-label" for="file-input">Añadir canciones</label>
+<input type="file" id="file-input" accept="audio/*" multiple />
+
+<div id="player">
+  <div id="info">
+    <h2 id="title">-</h2>
+    <p id="artist">-</p>
+    <p id="album">-</p>
+  </div>
+
+  <div id="progress-container">
+    <div id="progress"></div>
+  </div>
+
+  <div id="controls">
+    <button id="prev-btn" title="Anterior">
+      <!-- Icono de anterior -->
+      <svg height="24" width="24" fill="currentColor" viewBox="0 0 24 24"><path d="M6 18V6h2v12H6zm3-6l8.5 6V6L9 12z"/></svg>
+    </button>
+    <button id="play-pause-btn" title="Reproducir/Pausar">
+      <!-- Icono de play -->
+      <svg id="play-icon" height="24" width="24" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+      <!-- Icono de pausa (oculto inicialmente) -->
+      <svg id="pause-icon" height="24" width="24" fill="currentColor" viewBox="0 0 24 24" style="display:none;"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+    </button>
+    <button id="next-btn" title="Siguiente">
+      <!-- Icono de siguiente -->
+      <svg height="24" width="24" fill="currentColor" viewBox="0 0 24 24"><path d="M16 6v12h-2V6h2zm-3 6L4.5 6v12L13 12z"/></svg>
+    </button>
+    <button id="shuffle-btn" title="Reproducción aleatoria">
+      <!-- Icono de shuffle -->
+      <svg height="24" width="24" fill="currentColor" viewBox="0 0 24 24"><path d="M16 3h5v5l-2.5-2.5-4.5 4.5-1.5-1.5L16 3zM4 6v2h2l7 7-2 2-7-7v2H4V6z"/></svg>
+    </button>
+  </div>
+
+  <div id="playlist"></div>
+</div>
+
+<script>
+  const fileInput = document.getElementById('file-input');
+  const playlistEl = document.getElementById('playlist');
+  const titleEl = document.getElementById('title');
+  const artistEl = document.getElementById('artist');
+  const albumEl = document.getElementById('album');
+  const playPauseBtn = document.getElementById('play-pause-btn');
+  const playIcon = document.getElementById('play-icon');
+  const pauseIcon = document.getElementById('pause-icon');
+  const prevBtn = document.getElementById('prev-btn');
+  const nextBtn = document.getElementById('next-btn');
+  const shuffleBtn = document.getElementById('shuffle-btn');
+  const progressContainer = document.getElementById('progress-container');
+  const progressBar = document.getElementById('progress');
+
+  let audio = new Audio();
+  let playlist = [];
+  let currentIndex = 0;
+  let isPlaying = false;
+  let isShuffle = false;
+
+  // Extraer metadatos básicos del archivo (nombre, artista y álbum) usando etiquetas ID3 es complejo en JS puro sin librerías externas.
+  // Por simplicidad mostraremos el nombre del archivo, y "-" para artista y álbum.
+  function parseMetadata(file) {
+    return {
+      title: file.name.replace(/\.[^/.]+$/, ""),
+      artist: '-',
+      album: '-'
+    };
+  }
+
+  function loadSong(index) {
+    if (playlist.length === 0) return;
+    const song = playlist[index];
+    audio.src = song.url;
+    titleEl.textContent = song.title;
+    artistEl.textContent = song.artist;
+    albumEl.textContent = song.album;
+    highlightActiveSong();
+  }
+
+  function highlightActiveSong() {
+    [...playlistEl.children].forEach((el, i) => {
+      el.classList.toggle('active', i === currentIndex);
+    });
+  }
+
+  function playSong() {
+    audio.play();
+    isPlaying = true;
+    playIcon.style.display = 'none';
+    pauseIcon.style.display = 'inline';
+  }
+
+  function pauseSong() {
+    audio.pause();
+    isPlaying = false;
+    playIcon.style.display = 'inline';
+    pauseIcon.style.display = 'none';
+  }
+
+  function togglePlayPause() {
+    if (isPlaying) {
+      pauseSong();
+    } else {
+      playSong();
+    }
+  }
+
+  function prevSong() {
+    if (isShuffle) {
+      currentIndex = Math.floor(Math.random() * playlist.length);
+    } else {
+      currentIndex = (currentIndex - 1 + playlist.length) % playlist.length;
+    }
+    loadSong(currentIndex);
+    playSong();
+  }
+
+  function nextSong() {
+    if (isShuffle) {
+      currentIndex = Math.floor(Math.random() * playlist.length);
+    } else {
+      currentIndex = (currentIndex + 1) % playlist.length;
+    }
+    loadSong(currentIndex);
+    playSong();
+  }
+
+  // Actualiza la barra de progreso según el tiempo actual
+  audio.addEventListener('timeupdate', () => {
+    if (audio.duration) {
+      const percent = (audio.currentTime / audio.duration) * 100;
+      progressBar.style.width = percent + '%';
+    }
+  });
+
+  // Al hacer click en la barra de progreso, saltar a esa posición
+  progressContainer.addEventListener('click', (e) => {
+    const rect = progressContainer.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const width = rect.width;
+    if (audio.duration) {
+      audio.currentTime = (clickX / width) * audio.duration;
+    }
+  });
+
+  // Cuando termina una canción, pasar a la siguiente automáticamente
+  audio.addEventListener('ended', () => {
+    nextSong();
+  });
+
+  // Añadir canciones seleccionadas al playlist
+  fileInput.addEventListener('change', (e) => {
+    const files = Array.from(e.target.files);
+    files.forEach(file => {
+      const url = URL.createObjectURL(file);
+      const meta = parseMetadata(file);
+      playlist.push({
+        url,
+        title: meta.title,
+        artist: meta.artist,
+        album: meta.album
+      });
+    });
+    renderPlaylist();
+    if (playlist.length === files.length) {
+      // Si es la primera carga, cargar la primera canción
+      currentIndex = 0;
+      loadSong(currentIndex);
+    }
+  });
+
+  function renderPlaylist() {
+    playlistEl.innerHTML = '';
+    playlist.forEach((song, index) => {
+      const div = document.createElement('div');
+      div.textContent = song.title;
+      div.addEventListener('click', () => {
+        currentIndex = index;
+        loadSong(currentIndex);
+        playSong();
+      });
+      playlistEl.appendChild(div);
+    });
+    highlightActiveSong();
+  }
+
+  playPauseBtn.addEventListener('click', togglePlayPause);
+  prevBtn.addEventListener('click', prevSong);
+  nextBtn.addEventListener('click', nextSong);
+
+  shuffleBtn.addEventListener('click', () => {
+    isShuffle = !isShuffle;
+    shuffleBtn.classList.toggle('active', isShuffle);
+  });
+</script>
+
+</body>
+</html>
